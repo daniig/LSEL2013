@@ -1,2 +1,6 @@
+REGISTRO DE USUARIOS DEL REPOSITORIO
+Añade tu nombre a la lista para indicar que eres un miembro activo del
+repositorio.
+
 1.- Daniel Iglesias Diaz
-2.- Ramiro Utrilla
+2.- Ramiro Utrilla Gutiérrez
