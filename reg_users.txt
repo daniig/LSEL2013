@@ -4,4 +4,5 @@ repositorio.
 
 1.- Daniel Iglesias Diaz
 2.- Ramiro Utrilla Gutiérrez
-3.- Agustin Tena Garcia - (agus-xyz) 
+3.- Agustin Tena Garcia - (agus-xyz)
+4.- Jaime Rosado Lázaro 
