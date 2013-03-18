@@ -4,5 +4,12 @@ repositorio.
 
 1.- Daniel Iglesias Diaz
 2.- Ramiro Utrilla Gutiérrez
+<<<<<<< HEAD
 3.- Agustin Tena Garcia - (agus-xyz) 
 4.- Nicolas Saenz Julienne - (nicolassaenzj)
+=======
+3.- Agustin Tena Garcia - (agus-xyz)
+4.- Jaime Rosado Lázaro 
+5.- Raúl de Pablos Martín - (raulmerlin)
+6.- Yanis Briheche
+>>>>>>> f4cb8f0878d536b3bd5bb2089284f995918d2775

@@ -1,0 +1,5 @@
+Para ejecutar:
+
+Vamos a la carpeta Release
+
+./RPi_Sound train-sample.raw
