@@ -18,7 +18,9 @@ void actualizarPantalla() {
 		mvaddch(5, 2, ' ');
 	}
 	/*
-	 * Incluir aquí el código que actualiza la velocidad y posición
+	 * Incluir aquí el código que lee la velocidad y posición de los trenes en las estructuras
+	 * en las que están guardados (steam_t, diesel_t) y los imprime en el lugar correspondiente
+	 * con mvaddch
 	 */
 	refresh();			/* Print it on to the real screen */
 }
