@@ -4,6 +4,8 @@
 #include "trama.h"
 
 static TRM trama[N_TRENES];
+unsigned char TramaPendiente = 0;
+unsigned char TrenPendiente = 0;
 
 /*
 int main (void){
@@ -28,12 +30,37 @@ int main (void){
 }
 */
 
+PI_THREAD (controlVias){
+	while(1){
+		while(TramaPendiente == 0){
+			putTramaIdle();			
+			}
+		putTrama(TrenPendiente);
+		TramaPendiente = 0;
+	}
+}
+
 int initIO(){
+	int k = 0;	
+	for(k = 0; k < 2; k++){
+		trama[k].address.field_add.un1 = 0;
+		if (k == TREN_CARBON){
+			trama[k].address.field_add.add = TREN_CARBON_ADDRESS;
+		}
+		else{
+			trama[k].address.field_add.add = TREN_GASOIL_ADDRESS;
+		}
+		trama[k].control.field_ctr.un2 = 0b01;
+		trama[k].control.field_ctr.dir = FORWARD;
+		trama[k].control.field_ctr.vel = getVelocidadCode(0);
+		trama[k].error = trama[k].address.all_add ^ trama[k].control.all_ctr;
+	}	
 	if (wiringPiSetup () == -1){
 		return 1;
 	}
 	else{
 		pinMode (LINE_OUT, OUTPUT);
+		piThreadCreate(controlVias);		
 		return 0;
 	}
 }
@@ -43,6 +70,7 @@ void putUno(){
     	usleep(DELAY);	// Delay 58 mS
     	digitalWrite (LINE_OUT, 0);	// Off
     	usleep(DELAY);	// Delay 58 mS
+	printf("1");
 }
 
 void putCero(){
@@ -50,6 +78,7 @@ void putCero(){
     	usleep(2*DELAY);	// Delay 116 mS
     	digitalWrite (LINE_OUT, 0);	// Off
     	usleep(2*DELAY);	// Delay 116 mS
+	printf("0");
 }
 
 void putChar(char c){
@@ -65,24 +94,76 @@ void putChar(char c){
 }
 
 void putTrama(char tren){
+	printf("Enviando trama ==>");
 	//Enviamos cabecera (12 unos)	
 	int i;	
 	for (i = 0; i < CABECERA_LENGHT; i++) {
 		putUno();
 	}
 	//Separacion
+	printf(" ");
 	putCero();
+	printf(" ");
 	//Enviamos address
 	putChar(trama[tren].address.all_add);
 	//Separacion
+	printf(" ");
 	putCero();
+	printf(" ");
+
 	//Enviar velocidad y sentido
 	putChar(trama[tren].control.all_ctr);
 	//Separacion
+	printf(" ");
 	putCero();
+	printf(" ");
 	//Corrección de errores
-	putChar(trama[tren].address.all_add ^ trama[tren].control.all_ctr);	
+	putChar(trama[tren].address.all_add ^ trama[tren].control.all_ctr);
+
+	//Bit de terminacion
+	printf(" ");
+	putUno();	
+	printf(" \r\n");
 }
+
+void putTramaIdle(){
+	printf("Trama Idle==>");
+	//Enviamos cabecera (12 unos)	
+	int i;	
+	for (i = 0; i < CABECERA_LENGHT; i++) {
+		putUno();
+	}
+
+	//Separacion
+	printf(" ");
+	putCero();
+	printf(" ");
+
+	//Enviamos primer byte Idle
+	putChar(0xFF);
+
+	//Separacion
+	printf(" ");
+	putCero();
+	printf(" ");
+
+	//Enviar velocidad y sentido
+	putChar(0x00);
+
+	//Separacion
+	printf(" ");
+	putCero();
+	printf(" ");
+
+	//Corrección de errores
+	putChar(0xFF);
+	
+	//Bit de terminacion
+	printf(" ");
+	putUno();
+	printf(" \r\n");	
+}
+		
 
 void setVelocidad(char tren, char direccion, char velocidad){
 	trama[tren].address.field_add.un1 = 0;
@@ -96,7 +177,11 @@ void setVelocidad(char tren, char direccion, char velocidad){
 	trama[tren].control.field_ctr.dir = direccion;
 	trama[tren].control.field_ctr.vel = getVelocidadCode(velocidad);
 	trama[tren].error = trama[tren].address.all_add ^ trama[tren].control.all_ctr;
-	putTrama(tren);
+	
+	TrenPendiente = tren;
+	TramaPendiente = 1;
+	while(TramaPendiente == 1);	
+	//putTrama(tren);
 }
 
 char getVelocidadCode(char velocidad){

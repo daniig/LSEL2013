@@ -52,6 +52,7 @@ void putUno();
 void putCero();
 void putChar(char c);
 void putTrama(char tren);
+void putTramaIdle();
 void setVelocidad(char tren, char direccion, char velocidad);
 char getVelocidadCode(char velocidad);
 
