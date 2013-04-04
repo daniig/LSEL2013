@@ -1,7 +1,10 @@
-main: main.o
-	gcc $$CFLAGS $$LDFLAGS -lnative -lwiringPi $^ -o $@
+main: 
+	gcc $$CFLAGS $$LDFLAGS -lnative -lwiringPi main.c -o main
 
-%: %.c
-	gcc $$CFLAGS $$LDFLAGS -lnative -lwiringPi $^ -c $@
+prueba_ncurses:
+
+	gcc $$CFLAGS $$LDFLAGS -lnative -lwiringPi prueba_ncurses.c -lncurses -o prueba_ncurses
+
+
 
 

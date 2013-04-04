@@ -1,9 +1,8 @@
 /*
- * Name: 	IRtasks.c
- * Description:	Read some GPIO pins using wiringPi functions
- * Authors:	Andrés Madrid -  av.madrid@alumnos.upm.es
- *		Ramiro Utrilla - r.utrilla@alumnos.upm.es
- */
+* Name: IRtasks.c
+* Description: Read some GPIO pins using wiringPi functions
+* Authors: Group 1 LSEL2013
+*/
 
 // Libraries
 #include <wiringPi.h>
@@ -17,34 +16,37 @@
 #include <native/task.h>
 #include <native/timer.h>
 #include <rtdk.h>
+#include <ncurses.h>
+#include <string.h>
 #include "pin_config.h"
 
 
 struct train {
-	char train_type;
-	char current_sector;
-	SRTIME current_time;
-	char prev_sector;
-	SRTIME prev_time;
+char train_type;
+char current_sector;
+SRTIME current_time;
+char prev_sector;
+SRTIME prev_time;
 };
 
 // Global variables
-RT_TASK IRtracking_task;
-//RT_TASK testVias_task;
+RT_TASK IRtracking_task, Actualiza_pantalla;
 RT_MUTEX mutex_steam, mutex_diesel, mutex_pVia;
-int pin, err_steam, err_diesel, err_pVia;
+int pin, err_steam, err_diesel, err_pVia, s_count, d_count;
 struct train steam_t, diesel_t;
 char pVia, trenSeleccionado;
+char s0_state, s1_state, s2_state, s3_state;
+RTIME s0_ticks_temp, s1_ticks_temp, s2_ticks_temp, s3_ticks_temp;
 
 // IRtracking function
 void IRtracking(void *arg)
 {
-    RT_TASK *curtask;		// curtask y curtaskinfo se utilizan para heredar la información de la tarea actual
-    RT_TASK_INFO curtaskinfo;	// para posteriormente indicar qué tarea se está ejecutando, etc. (ver función rt_task_inquire al final de la tarea)
-    RTIME ticks_temp;
+    //RT_TASK *curtask;			// curtask y curtaskinfo se utilizan para heredar la información de la tarea actual
+    //RT_TASK_INFO curtaskinfo;	// para posteriormente indicar qué tarea se está ejecutando, etc. (ver función rt_task_inquire al final de la tarea)
+    //RTIME ticks_temp;
 
-    rt_task_set_periodic(NULL, TM_NOW, 1000000000);
-
+    rt_task_set_periodic(NULL, TM_NOW, IRT_PERIOD); 
+    
     while(1){
 
     // Blocks the while loop till the next periodic interruption
@@ -54,224 +56,383 @@ void IRtracking(void *arg)
     rt_mutex_acquire(&mutex_steam,TM_INFINITE);
     rt_mutex_acquire(&mutex_diesel,TM_INFINITE);
 
-    // Read all the IR sensors
-    // Los pins están puestos al tuntún, habría que ver exáctamente cómo los vamos a conectar y poner los numeros de manera concordante.
-
-    // First point
-    if (digitalRead(0) == HIGH)		// Bottom sensor
-    {
-      if (digitalRead(1) == HIGH){  	// Top sensor
-        steam_t.prev_sector = steam_t.current_sector;
-	steam_t.prev_time = steam_t.current_time;
-	steam_t.current_sector = '1';
-	ticks_temp = rt_timer_read();
-	steam_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
-      else{
-        diesel_t.prev_sector = diesel_t.current_sector;
-	diesel_t.prev_time = diesel_t.current_time;
-	diesel_t.current_sector = '1';
-	ticks_temp = rt_timer_read();
-	diesel_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
+    // SECTOR 0 ----------------------------------------------------------------------------------------------------------
+    // 'Idle' state
+    if (s0_state=='I'){
+        if (digitalRead(GPIO_IR0_ALTO) == HIGH){   // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save the time information
+            s0_state = 'S';
+    	    s0_ticks_temp = rt_timer_read();
+    	}
+        else if (digitalRead(GPIO_IR0_BAJO) == HIGH){// Bottom sensor. HIGH = Diesel train or the first part of the Steam train.
+            // Change to the 'Checking' state and save the time information
+            s0_state = 'C';
+	    s0_ticks_temp = rt_timer_read();
+        }
     }
 
-    // Second point
-    if (digitalRead(2)==HIGH)		// Bottom sensor
-    {
-      if (digitalRead(3) == HIGH){	// Top sensor
-        steam_t.prev_sector = steam_t.current_sector;
-	steam_t.prev_time = steam_t.current_time;
-	steam_t.current_sector = '2';
-	ticks_temp = rt_timer_read();
-	steam_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
-      else{
-        diesel_t.prev_sector = diesel_t.current_sector;
-	diesel_t.prev_time = diesel_t.current_time;
-	diesel_t.current_sector = '2';
-	ticks_temp = rt_timer_read();
-	diesel_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
+    // 'Steam train' state
+    else if (s0_state=='S'){
+        if (digitalRead(GPIO_IR0_BAJO) == LOW){       // Bottom sensor. LOW = No train
+	    s_count++;            
+	    if (s_count == IDLE_COUNT) {
+		s_count = 0;
+            	s0_state = 'I';
+		steam_t.prev_sector = steam_t.current_sector;
+ 	        steam_t.current_sector = '0';
+    	    	steam_t.prev_time = steam_t.current_time;
+            	steam_t.current_time = rt_timer_ticks2ns(s0_ticks_temp);
+	    }
+	}
+	else
+	    s_count = 0;
+    }
+    
+    // 'Checking' state
+    else if (s0_state=='C'){
+        
+	if (digitalRead(GPIO_IR0_ALTO) == HIGH){    // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save time information
+            s0_state = 'S';
+            s0_ticks_temp = rt_timer_read();
+        }
+        
+	else if (digitalRead(GPIO_IR0_BAJO) == LOW){// Bottom sensor. LOW = Diesel train
+            d_count++;            
+	    if (d_count == IDLE_COUNT){
+		d_count = 0;
+            	s0_state = 'I';
+		diesel_t.prev_sector = diesel_t.current_sector;
+                diesel_t.current_sector = '0';
+                diesel_t.prev_time = diesel_t.current_time;
+		diesel_t.current_time = rt_timer_ticks2ns(s0_ticks_temp);
+	    }
+	} else {
+		d_count = 0;
+	}
+    }
+ 
+    // END OF SECTOR 0 ---------------------------------------------------------------------------------------------------
+    
+    // SECTOR 1 ----------------------------------------------------------------------------------------------------------
+    // 'Idle' state
+    if (s1_state=='I'){
+        if (digitalRead(GPIO_IR1_ALTO) == HIGH){   // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save the time information
+            s1_state = 'S';
+    	    s1_ticks_temp = rt_timer_read();
+    	}
+        else if (digitalRead(GPIO_IR1_BAJO) == HIGH){// Bottom sensor. HIGH = Diesel train or the first part of the Steam train.
+            // Change to the 'Checking' state and save the time information
+            s1_state = 'C';
+	    s1_ticks_temp = rt_timer_read();
+        }
     }
 
-    // Third point
-    if (digitalRead(4) == HIGH)		// Bottom sensor
-    {
-      if (digitalRead(5) == HIGH){	// Top sensor
-        steam_t.prev_sector = steam_t.current_sector;
-	steam_t.prev_time = steam_t.current_time;
-	steam_t.current_sector = '3';
-	ticks_temp = rt_timer_read();
-	steam_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
-      else{
-        diesel_t.prev_sector = diesel_t.current_sector;
-	diesel_t.prev_time = diesel_t.current_time;
-	diesel_t.current_sector = '3';
-	ticks_temp = rt_timer_read();
-	diesel_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
+    // 'Steam train' state
+    else if (s1_state=='S'){
+        if (digitalRead(GPIO_IR1_BAJO) == LOW){       // Bottom sensor. LOW = No train
+	    s_count++;            
+	    if (s_count == IDLE_COUNT) {
+		s_count = 0;
+            	s1_state = 'I';
+		steam_t.prev_sector = steam_t.current_sector;
+ 	        steam_t.current_sector = '1';
+    	    	steam_t.prev_time = steam_t.current_time;
+            	steam_t.current_time = rt_timer_ticks2ns(s1_ticks_temp);
+	    }
+	}
+	else
+	    s_count = 0;
+    }
+    
+    // 'Checking' state
+    else if (s1_state=='C'){
+        
+	if (digitalRead(GPIO_IR1_ALTO) == HIGH){    // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save time information
+            s1_state = 'S';
+            s1_ticks_temp = rt_timer_read();
+        }
+        
+	else if (digitalRead(GPIO_IR1_BAJO) == LOW){// Bottom sensor. LOW = Diesel train
+            d_count++;            
+	    if (d_count == IDLE_COUNT){
+		d_count = 0;
+            	s1_state = 'I';
+		diesel_t.prev_sector = diesel_t.current_sector;
+                diesel_t.current_sector = '1';
+                diesel_t.prev_time = diesel_t.current_time;
+		diesel_t.current_time = rt_timer_ticks2ns(s1_ticks_temp);
+	    }
+	} else {
+		d_count = 0;
+	}
+    }
+    // END OF SECTOR 1 ---------------------------------------------------------------------------------------------------  
+
+    // SECTOR 2 ----------------------------------------------------------------------------------------------------------
+     // 'Idle' state
+    if (s2_state=='I'){
+        if (digitalRead(GPIO_IR2_ALTO) == HIGH){   // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save the time information
+            s2_state = 'S';
+    	    s2_ticks_temp = rt_timer_read();
+    	}
+        else if (digitalRead(GPIO_IR2_BAJO) == HIGH){// Bottom sensor. HIGH = Diesel train or the first part of the Steam train.
+            // Change to the 'Checking' state and save the time information
+            s2_state = 'C';
+	    s2_ticks_temp = rt_timer_read();
+        }
     }
 
-    // Fourth point
-    if (digitalRead(6) == HIGH)		// Bottom sensor
-    {
-      if (digitalRead(7) == HIGH){	// Top sensor
-        steam_t.prev_sector = steam_t.current_sector;
-	steam_t.prev_time = steam_t.current_time;
-	steam_t.current_sector = '4';
-	ticks_temp = rt_timer_read();
-	steam_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
-      else{
-        diesel_t.prev_sector = diesel_t.current_sector;
-	diesel_t.prev_time = diesel_t.current_time;
-	diesel_t.current_sector = '4';
-	ticks_temp = rt_timer_read();
-	diesel_t.current_time = rt_timer_ticks2ns(ticks_temp);
-      }
+    // 'Steam train' state
+    else if (s2_state=='S'){
+        if (digitalRead(GPIO_IR2_BAJO) == LOW){       // Bottom sensor. LOW = No train
+	    s_count++;            
+	    if (s_count == IDLE_COUNT) {
+		s_count = 0;
+            	s2_state = 'I';
+		steam_t.prev_sector = steam_t.current_sector;
+ 	        steam_t.current_sector = '2';
+    	    	steam_t.prev_time = steam_t.current_time;
+            	steam_t.current_time = rt_timer_ticks2ns(s2_ticks_temp);
+	    }
+	}
+	else
+	    s_count = 0;
+    }
+    
+    // 'Checking' state
+    else if (s2_state=='C'){
+        
+	if (digitalRead(GPIO_IR2_ALTO) == HIGH){    // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save time information
+            s2_state = 'S';
+            s2_ticks_temp = rt_timer_read();
+        }
+        
+	else if (digitalRead(GPIO_IR2_BAJO) == LOW){// Bottom sensor. LOW = Diesel train
+            d_count++;            
+	    if (d_count == IDLE_COUNT){
+		d_count = 0;
+            	s2_state = 'I';
+		diesel_t.prev_sector = diesel_t.current_sector;
+                diesel_t.current_sector = '2';
+                diesel_t.prev_time = diesel_t.current_time;
+		diesel_t.current_time = rt_timer_ticks2ns(s2_ticks_temp);
+	    }
+	} else {
+		d_count = 0;
+	}
+    }
+    // END OF SECTOR 2 ---------------------------------------------------------------------------------------------------  
+
+    // SECTOR 3 ----------------------------------------------------------------------------------------------------------
+     // 'Idle' state
+    if (s3_state=='I'){
+        if (digitalRead(GPIO_IR3_ALTO) == HIGH){   // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save the time information
+            s3_state = 'S';
+    	    s3_ticks_temp = rt_timer_read();
+    	}
+        else if (digitalRead(GPIO_IR3_BAJO) == HIGH){// Bottom sensor. HIGH = Diesel train or the first part of the Steam train.
+            // Change to the 'Checking' state and save the time information
+            s3_state = 'C';
+	    s3_ticks_temp = rt_timer_read();
+        }
     }
 
-    // rt_printf("Chupame el orto:  .|. \n");
-
+    // 'Steam train' state
+    else if (s3_state=='S'){
+        if (digitalRead(GPIO_IR3_BAJO) == LOW){       // Bottom sensor. LOW = No train
+	    s_count++;            
+	    if (s_count == IDLE_COUNT) {
+		s_count = 0;
+            	s3_state = 'I';
+		steam_t.prev_sector = steam_t.current_sector;
+ 	        steam_t.current_sector = '3';
+    	    	steam_t.prev_time = steam_t.current_time;
+            	steam_t.current_time = rt_timer_ticks2ns(s3_ticks_temp);
+	    }
+	}
+	else
+	    s_count = 0;
+    }
+    
+    // 'Checking' state
+    else if (s3_state=='C'){
+        
+	if (digitalRead(GPIO_IR3_ALTO) == HIGH){    // Top sensor. HIGH = Steam train
+            // Change to the 'Steam train' state and save time information
+            s3_state = 'S';
+            s3_ticks_temp = rt_timer_read();
+        }
+        
+	else if (digitalRead(GPIO_IR3_BAJO) == LOW){// Bottom sensor. LOW = Diesel train
+            d_count++;            
+	    if (d_count == IDLE_COUNT){
+		d_count = 0;
+            	s3_state = 'I';
+		diesel_t.prev_sector = diesel_t.current_sector;
+                diesel_t.current_sector = '3';
+                diesel_t.prev_time = diesel_t.current_time;
+		diesel_t.current_time = rt_timer_ticks2ns(s3_ticks_temp);
+	    }
+	} else {
+		d_count = 0;
+	}
+    }
+    // END OF SECTOR 3 ---------------------------------------------------------------------------------------------------    
+    
     // Release mutex_steam and mutex_diesel
     rt_mutex_release(&mutex_steam);
     rt_mutex_release(&mutex_diesel);
 
-
-
-    // Inquire current task: return values information about the status of a given task
-    //curtask = rt_task_self();
-    //rt_task_inquire(curtask, &curtaskinfo);
-
-    // Print task name
-    //rt_printf("Task name : %s \n", curtaskinfo.name);
   }
 }
 
-void mostrarDatos(void)
+
+// sector: el sector por el que acaba de pasar el tren
+double calcularVelocidad(char sector, SRTIME prevTime, SRTIME currTime) {
+	double longitud;
+	if(sector == '0' || sector == '2') {
+		longitud = 40*3.1416;
+	} else {
+		longitud = 90;
+	}
+	SRTIME intervalo = currTime - prevTime;
+	double intervDouble = (double) intervalo;
+	double velCmS = longitud/(intervDouble/1000000000);
+	return velCmS;
+}
+
+void imprimirInterfazInicial() {
+	mvprintw(2, 36, "CONTROL DE TRENES");
+	mvprintw(4, 3, "Tren");
+	mvprintw(4, 18, "Sector");
+	mvprintw(4, 33, "Velocidad (cm/s)");
+	mvprintw(5, 3, "DIESEL");
+	mvprintw(5, 18, "*");
+	mvprintw(5, 33, "*");
+	mvprintw(6, 3, "VAPOR");
+	mvprintw(6, 18, "*");
+	mvprintw(6, 33, "*");
+	mvprintw(8, 3, "Cambio via");	// Ojo: por alguna razón meter vocales acentuadas descuadra las coordenadas
+	mvprintw(8, 18, "Estado");
+	mvprintw(9, 18, "*");
+	mvprintw(11, 3, "(0-9) Ajustar vel. tren selec. - (C) Cambio de vía - (T) Cambiar tren selec.");
+
+}
+
+
+void Apantalla(void *arg)
 {
-  // Acquire mutex_steam and mutex_diesel
-  rt_mutex_acquire(&mutex_steam,TM_INFINITE);
-  rt_mutex_acquire(&mutex_diesel,TM_INFINITE);
-//  rt_mutex_acquire(&mutex_pVia,TM_INFINITE);
 
+	rt_task_set_periodic(NULL, TM_NOW, 500000000);
 
-  rt_printf("\nSteam train info - Sector: %c  Time: %i ns \n", steam_t.current_sector, steam_t.current_time);
-  rt_printf("Diesel train info - Sector: %c  Time: %i ns \n", diesel_t.current_sector, diesel_t.current_time);
-  rt_printf("Railroad track position: %c \n", pVia);
+	while(1){
+    		rt_task_wait_period(NULL);
+  		// Acquire mutex_steam and mutex_diesel
+		rt_mutex_acquire(&mutex_steam,TM_INFINITE);
+		rt_mutex_acquire(&mutex_diesel,TM_INFINITE);
+		// rt_mutex_acquire(&mutex_pVia,TM_INFINITE);
 
+	        mvaddch(5, 18, diesel_t.current_sector);
+		mvaddch(6, 18, steam_t.current_sector);
 
-  // Release mutex_steam and mutex_diesel
-  rt_mutex_release(&mutex_steam);
-  rt_mutex_release(&mutex_diesel);
-//  rt_mutex_release(&mutex_pVia);
+		if (pVia == '0')
+			mvprintw(9, 18, "Via interior");
+		else{
+			mvprintw(9, 18, "Via exterior");
+		}
+		
+		mvprintw(5, 33, "%f", calcularVelocidad(diesel_t.current_sector, diesel_t.prev_time, diesel_t.current_time));
+		mvprintw(6, 33, "%f", calcularVelocidad(steam_t.current_sector, steam_t.prev_time, steam_t.current_time));
+		mvprintw(12, 3, ">>");
+		refresh();
+
+  		// Release mutex_steam and mutex_diesel
+  		rt_mutex_release(&mutex_steam);
+  		rt_mutex_release(&mutex_diesel);
+		// rt_mutex_release(&mutex_pVia);
+	}
 
 }
 
 void cambiarVia(void)
 {
-// rt_printf("Metodo cambio de via"); 
- if(pVia == '1')
- {
-// rt_mutex_acquire(&mutex_pVia,TM_INFINITE);
-    pVia = '0';
-// rt_mutex_release(&mutex_pVia);
-    digitalWrite (10,0) ; // Off
-  }else{
-
- //rt_mutex_acquire(&mutex_pVia,TM_INFINITE);
-    pVia = '1';
-// rt_mutex_release(&mutex_pVia);
-    digitalWrite (10,1) ; // On
- }
-
-
-
+	if(pVia == '1')
+ 	{
+	    	pVia = '0';
+	   	digitalWrite (GPIO_CAMBIO_VIA,0) ; // Off
+	}else{
+    		pVia = '1';
+		digitalWrite (GPIO_CAMBIO_VIA,1) ; // On
+ 	}
 }
+
 
 // variableInit Function
 int variableInit (void)
 {
-    // Inicialización estructuras train.
-    steam_t.train_type = 'S';
-    steam_t.current_sector = '0';
-    steam_t.current_time = 0;
-    steam_t.prev_sector = '0';
-    steam_t.prev_time = 0;
-    diesel_t.train_type = 'D';
-    diesel_t.current_sector = '0';
-    diesel_t.current_time = 0;
-    diesel_t.prev_sector = '0';
-    diesel_t.prev_time = 0;
-    pVia = '0';
-    return 0;
+	// Inicialización estructuras train.
+	steam_t.train_type = 'S';
+	steam_t.current_sector = '0';
+	steam_t.current_time = 0;
+	steam_t.prev_sector = '0';
+	steam_t.prev_time = 0;
+	diesel_t.train_type = 'D';
+	diesel_t.current_sector = '0';
+	diesel_t.current_time = 0;
+	diesel_t.prev_sector = '0';
+	diesel_t.prev_time = 0;
+	pVia = '1';
+	s0_state = 'I';
+    	s1_state = 'I';
+    	s2_state = 'I';
+    	s3_state = 'I';
+	s_count = 0;
+	d_count = 0;
+	return 0;
 }
-
-
 
 void catch_signal() {}
 
-
 void disminuirVelocidad() {
-  printf("Nueva velocidad tren %c: ...\n", trenSeleccionado);
+	// Se encarga el otro grupo
 }
 
 void aumentarVelocidad() {
-  printf("Nueva velocidad tren %c: ...\n", trenSeleccionado);
-}
+	// Se encarga el otro grupo
 
+}
 
 int interfaz_usuario(void)
 {
-  printf("INTERFAZ DE CONTROL DE TRENES\n");
-  printf("(M)onitorizar - (1) (2) Seleccionar tren - (+)(-) Ajustar velocidad - Ajustar (c)ambio de vía - (E)xit/Salir\n");
-  
-  char in[64];
-  while(1) {
-    // Esperamos a recibir un carácter válido
-    printf(">>");
-    scanf("%s", in);
-    switch (in[0]) {
-      case 'm':
-      case 'M':
-  printf("\n");
-  mostrarDatos();
-  break;
-      case '1':
-  printf("\n");
-  trenSeleccionado = 1;
-  printf("Seleccionado tren 1\n");
-  break;
-      case '2':
-  printf("\n");
-  trenSeleccionado = 2;
-  printf("Seleccionado tren 2\n");
-  break;
-      case '+':
-  printf("\n");
-  aumentarVelocidad();
-  break;
-      case '-':
-  printf("\n");
-  disminuirVelocidad();
-  break;
-      case 'c':
-      case 'C':
-  printf("\n");
-  cambiarVia();
-  break;
-      case 'e':
-      case 'E':
-      return 0;
-      default:
-  printf("\n");
-  printf("Comando no reconocido\n");
-  break;
-    }
-  }
-return 0;
+	char in[64];
+	while(1)
+	{
+		mvprintw(12, 3, ">>");
+		clrtoeol();
+		scanw("%s", in);
+
+		if(in[0] >= '0' && in <= '9')
+		{
+			// Llamar a la función que actualiza la velocidad
+			// ...
+		}else if(in[0]  == 'c') {
+			cambiarVia();
+			// Si pVia = 0 seleciona la via interior
+
+		}else if(in[0]  == 'e') {
+			// No se puede acabar el programa con Ctl+C o Ctl+Z porque ncurses se vuelve loco y hay que rebootear la RPi
+			// Hay que terminar siempre el programa con el comando "e"
+			endwin();
+			exit(0);
+		}
+	}
+	return 0;
 }
 
 
@@ -279,13 +440,13 @@ return 0;
 int main(int argc, char* argv[])
 {
 
-  // Blocks interruptions and stuff
-  signal(SIGTERM, catch_signal);
-  signal(SIGINT, catch_signal);
+	// Blocks interruptions and stuff
+	signal(SIGTERM, catch_signal);
+	signal(SIGINT, catch_signal);
 	/* Create a mutex; we could also have attempted to bind to some
-	   pre-existing object, using rt_mutex_bind() and rt_mutex_bind()
-	   instead of creating it. In any case, priority inheritance is
-	   automatically enforced for mutual exclusion locks. */
+	pre-existing object, using rt_mutex_bind() and rt_mutex_bind()
+	instead of creating it. In any case, priority inheritance is
+	automatically enforced for mutual exclusion locks. */
 
 	err_steam = rt_mutex_create(&mutex_steam,"SteamMutex");
 	err_diesel = rt_mutex_create(&mutex_diesel,"DieselMutex");
@@ -294,62 +455,59 @@ int main(int argc, char* argv[])
 
 	// Función de configuración utilizada en el tutorial (?comprobar su utilidad):
 	if (wiringPiSetup () == -1)
-	exit (1) ;
+		exit (1) ;
 
 	// Inicialización de todas las variables.
 	if (variableInit () == -1)
-	exit (1) ;
+		exit (1) ;
 
-	// Se configuran los pines 0 al 8 como entrada:
-	for (pin = 0 ; pin < 8 ; ++pin)
-	pinMode (pin, INPUT) ;
+	// Se configuran los pines 0 al 7 como entrada -> Sensores IR
+	for (pin = 0 ; pin < 8 ; pin++)
+		pinMode (pin, INPUT);
 
-	pinMode (10,OUTPUT);
-      	digitalWrite (10,1) ; // On
+	// Se configura el pin 10 como salida -> cambio de via
+	pinMode (GPIO_CAMBIO_VIA,OUTPUT);
+       	digitalWrite (GPIO_CAMBIO_VIA,1) ; // Empieza por la via exterior
 
-	char  str[10] ;
+	char str[10] ;
 	// Perform auto-init of rt_print buffers if the task doesn't do so
 	rt_print_auto_init(1);
 
 	// Lock memory : avoid memory swapping for this program
 	mlockall(MCL_CURRENT|MCL_FUTURE);
 
-//	rt_printf("start task\n");
+	// rt_printf("start task\n");
 
 	/*
 	* Arguments: &task,
-	*            name,
-	*            stack size (0=default),
-	*            priority,
-	*            mode (FPU, start suspended, ...)
+	* name,
+	* stack size (0=default),
+	* priority,
+	* mode (FPU, start suspended, ...)
 	*/
 
-  	sprintf(str, "IRtracking");
 	rt_task_create(&IRtracking_task, str, 0, 50, 0);
-
-
-        //Creo un task para la prueba de las vias - AndresC
-        //rt_task_start(&testVias_task; &test_vias, 0);
-
-
-	/*
-	* Arguments: &task,
-	*            task function,
-	*            function argument
-	*/
+	rt_task_create(&Actualiza_pantalla, str, 0, 40, 0);
+	initscr();			/* Start curses mode */
+	//noecho();
+	curs_set(0);
+	imprimirInterfazInicial();
 
 	rt_task_start(&IRtracking_task, &IRtracking, 0);
-  interfaz_usuario();
-  rt_task_delete(&IRtracking_task);
-//  cleanup();
+	rt_task_start(&Actualiza_pantalla, &Apantalla, 0);
+	interfaz_usuario();
+	rt_task_delete(&Actualiza_pantalla);
+	rt_task_delete(&IRtracking_task);
+	endwin();			/* End curses mode		  */
+	// cleanup();
 
-    	return 0;
+	return 0;
 
 }
 
 // Borrado del MUTEX:
 void cleanup (void)
 {
-    rt_mutex_delete(&mutex_steam);
-    rt_mutex_delete(&mutex_diesel);
+	rt_mutex_delete(&mutex_steam);
+	rt_mutex_delete(&mutex_diesel);
 }
