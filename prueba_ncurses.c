@@ -39,30 +39,26 @@ void imprimirInterfazInicial() {
 	mvprintw(8, 3, "Cambio via");	// Ojo: por alguna razón meter vocales acentuadas descuadra las coordenadas
 	mvprintw(8, 18, "Estado");
 	mvprintw(9, 18, "0");
-	mvprintw(11, 3, "(0-9) Ajustar vel. tren selec. - (C) Cambio de vía - (T) Cambiar tren selec.");
-
+	mvprintw(20, 3, "(0-9) Ajustar vel. tren selec. - (C) Cambio de vía - (T) Cambiar tren selec.");
 }
 
 int main() {	
 	initscr();			/* Start curses mode */
-	//noecho();
+	noecho();
 	curs_set(0);
 	imprimirInterfazInicial();
 	actualizarPantalla();
-	char in[64];
+	char in;
 	while(1) {
-		
-		mvprintw(12, 3, ">>");
-		clrtoeol();
-		scanw("%s", in);
-		if(in[0] >= '0' && in <= '9') {
+		in = getch();
+		if(in >= '0' && in <= '9') {
 			// Llamar a la función que actualiza la velocidad
 			// ...
-		} else if(in[0]  == 'c') {
+		} else if(in == 'c') {
 			// Llamar a la función que cambia la vía
 			// cambiarVia();
 			actualizarPantalla();
-		} else if(in[0]  == 't') {
+		} else if(in == 't') {
 			if(trenSeleccionado == 1) {
 				trenSeleccionado = 0;
 			} else {
@@ -71,7 +67,7 @@ int main() {
 		}
 		actualizarPantalla();
 	}
-	endwin();			/* End curses mode		  */
+	endwin();			/* End curses mode */
 	
 	return 0;
 }
