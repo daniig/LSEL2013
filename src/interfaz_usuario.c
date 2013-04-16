@@ -12,6 +12,44 @@
 #include <stdlib.h>
 #include "main_tren.h"
 
+char trenSeleccionado = 0;
+
+int interfaz_usuario(void)
+{
+	char in[64];
+	while(1)
+	{
+		mvprintw(15, 3, ">>");
+		clrtoeol();
+		scanw("%s", in);
+
+		if(in[0] >= '0' && in <= '9')
+		{
+			// Llamar a la función que actualiza la velocidad
+			// ...
+		}else if(in[0]  == 'c') {
+			cambiarVia();
+			// Si pVia = 0 seleciona la via interior
+
+		}else if(in[0]  == 'e') {
+			// No se puede acabar el programa con Ctl+C o Ctl+Z porque ncurses se vuelve loco y hay que rebootear la RPi
+			// Hay que terminar siempre el programa con el comando "e"
+			endwin();
+			exit(0);
+
+		}else if(in[0] == 't') {
+			// Cambiamos el tren seleccionado (el tren cuya velocidad queremos cambiar)
+			if (trenSeleccionado == 0) {
+				trenSeleccionado = 1;
+			} else {
+				trenSeleccionado = 0;
+			}
+		}
+	}
+	system("reset");	// Reset del terminal
+	return 0;
+}
+
 void imprimirInterfazInicial() {
 	/* ----------------- COLORS SET -------------------
 		COLOR_BLACK   0
@@ -39,7 +77,6 @@ void imprimirInterfazInicial() {
 	//mvprintw(2, 36, "CONTROL DE TRENES");
 	mvprintw(2, 28, "CONTROL DE TRENES");
 	attroff(COLOR_PAIR(1));
-
 	attron(COLOR_PAIR(2));
 	mvprintw(4, 3, "Tren");
 	mvprintw(4, 18, "Sector");
@@ -53,8 +90,7 @@ void imprimirInterfazInicial() {
 	mvprintw(8, 3, "Cambio via");	// Ojo: por alguna razón meter vocales acentuadas descuadra las coordenadas
 	mvprintw(8, 18, "Estado");
 	mvprintw(9, 18, "*");
-	//mvprintw(11, 3, "(0-9) Ajustar vel. tren selec. - (C) Cambio de vía - (T) Cambiar tren selec.");
-	mvprintw(11, 3, "(C) Cambio de via - (e) Exit/Salir");
+	mvprintw(11, 3, "(c) Cambio de via - (t) Cambiar tren selec. - (0-9) Ajustar vel. tren - (e) Salir");
 	attroff(COLOR_PAIR(2));
 
 }
@@ -90,15 +126,16 @@ void Apantalla(void *arg)
 		rt_mutex_acquire(&mutex_diesel,TM_INFINITE);
 		// rt_mutex_acquire(&mutex_pVia,TM_INFINITE);
 
+		// Escribimos el sector
 		mvaddch(5, 18, diesel_t.current_sector);
 		mvaddch(6, 18, steam_t.current_sector);
-
+		// Escribimos la vía
 		if (pVia == '0')
 			mvprintw(9, 18, "Via interior");
 		else{
 			mvprintw(9, 18, "Via exterior");
 		}
-
+		// Escribimos la velocidad
 		VelDiesel=calcularVelocidad(diesel_t.current_sector, diesel_t.prev_time, diesel_t.current_time);
 		VelVapor=calcularVelocidad(steam_t.current_sector, steam_t.prev_time, steam_t.current_time);
 
@@ -111,6 +148,15 @@ void Apantalla(void *arg)
 			mvprintw(6, 33, "No Data");
 		else
 			mvprintw(6, 33, "%f", VelVapor);
+
+		// Escribimos el selector de tren
+		if(trenSeleccionado == 0) {
+			mvaddch(5, 1, '*');
+			mvaddch(6, 1, ' ');
+		} else {
+			mvaddch(6, 1, '*');
+			mvaddch(5, 1, ' ');
+		}
 
 		init_pair(4, COLOR_YELLOW, COLOR_BLACK);
 

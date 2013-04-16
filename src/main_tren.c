@@ -27,7 +27,7 @@ RT_TASK IRtracking_task, Actualiza_pantalla;
 RT_MUTEX mutex_steam, mutex_diesel, mutex_pVia;
 int pin, err_steam, err_diesel, err_pVia, s_count, d_count;
 struct train steam_t, diesel_t;
-char pVia, trenSeleccionado;
+char pVia;
 char s0_state, s1_state, s2_state, s3_state;
 RTIME s0_ticks_temp, s1_ticks_temp, s2_ticks_temp, s3_ticks_temp;
 
@@ -331,35 +331,6 @@ void disminuirVelocidad() {
 void aumentarVelocidad() {
 	// Se encarga el otro grupo
 
-}
-
-int interfaz_usuario(void)
-{
-	char in[64];
-	while(1)
-	{
-		mvprintw(15, 3, ">>");
-		clrtoeol();
-		scanw("%s", in);
-
-		if(in[0] >= '0' && in <= '9')
-		{
-			// Llamar a la función que actualiza la velocidad
-			// ...
-		}else if(in[0]  == 'c') {
-			cambiarVia();
-			// Si pVia = 0 seleciona la via interior
-
-		}else if(in[0]  == 'e') {
-			// No se puede acabar el programa con Ctl+C o Ctl+Z porque ncurses se vuelve loco y hay que rebootear la RPi
-			// Hay que terminar siempre el programa con el comando "e"			
-			endwin();
-			exit(0);
-
-		}
-	}
-	system("reset");	// Reset del terminal
-	return 0;
 }
 
 // Borrado del MUTEX:
