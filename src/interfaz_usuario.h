@@ -10,5 +10,6 @@
 
 void imprimirInterfazInicial();
 void Apantalla(void *arg);
+int interfaz_usuario();
 
 #endif /* INTERFAZ_USUARIO_H_ */

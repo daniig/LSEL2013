@@ -19,4 +19,6 @@ extern RT_MUTEX mutex_steam, mutex_diesel;
 extern struct train steam_t, diesel_t;
 extern char pVia;
 
+void cambiarVia();
+
 #endif
