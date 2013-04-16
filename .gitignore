@@ -1,5 +1,6 @@
 .directory
 .DS_Store
+Debug/
 
 # Object files
 *.o

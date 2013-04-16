@@ -5,6 +5,8 @@
 #ifndef MAIN_TREN_H
 #define MAIN_TREN_H
 
+#include <native/mutex.h>
+
 struct train {
 	char train_type;
 	char current_sector;
@@ -13,23 +15,8 @@ struct train {
 	SRTIME prev_time;
 };
 
-// IRtracking function
-void IRtracking(void *arg);
-
-void mostrarDatos(void);
-
-void cambiarVia(void);
-
-int variableInit (void);
-
-void catch_signal();
-
-void disminuirVelocidad();
-
-void aumentarVelocidad();
-
-int interfaz_usuario(void);
-
-void cleanup(void);
+extern RT_MUTEX mutex_steam, mutex_diesel;
+extern struct train steam_t, diesel_t;
+extern char pVia;
 
 #endif
