@@ -11,7 +11,7 @@ char samples[TAMANO_BUFF_SAMPLE];
 int bufSize;
 char buf[TAMANO_BUFF_COPIA];
 
-int main(int argc, char *argv[]) {
+int main_sonido(int argc, char *argv[]) {
 	int pid;
 	int tubo[2];
 	pipe(tubo);
